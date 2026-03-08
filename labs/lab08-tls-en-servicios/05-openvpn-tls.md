@@ -1,0 +1,129 @@
+## Lab 05 — OpenVPN con certificados X.509
+
+En este ejercicio utilizarás la PKI del curso para configurar una topología sencilla de **OpenVPN** con certificados X.509.
+
+El objetivo es ver cómo se usan los certificados emitidos por tu CA en un servicio de VPN real.
+
+---
+
+### 1. Preparar certificados para OpenVPN
+
+Partiendo de tu PKI del curso:
+
+1. Genera una clave y CSR para el servidor VPN:
+
+```bash
+cd ~/labs/pki        # ajusta esta ruta a tu estructura real
+openssl genpkey -algorithm RSA -out vpn-server.key
+openssl req -new -key vpn-server.key -out vpn-server.csr \
+  -subj "/CN=vpn.lab.local"
+```
+
+2. Firma la CSR con tu Intermediate CA:
+
+```bash
+openssl x509 -req -in vpn-server.csr \
+  -CA ca/intermediate-ca.crt -CAkey ca/intermediate-ca.key \
+  -CAcreateserial -out vpn-server.crt -days 365 -extfile openssl.cnf \
+  -extensions server_cert
+```
+
+3. Genera también un certificado de cliente (`vpn-client.key`, `vpn-client.crt`) siguiendo el mismo flujo que utilizaste para certificados de servidor/cliente en laboratorios anteriores.
+
+---
+
+### 2. Desplegar un servidor OpenVPN de laboratorio
+
+Puedes utilizar un contenedor Docker de OpenVPN Community Edition o un servidor Linux de pruebas.
+
+Ejemplo con Docker (orientativo):
+
+```bash
+docker run --name openvpn-lab -v $PWD:/etc/openvpn -d \
+  --cap-add=NET_ADMIN -p 1194:1194/udp openvpn/openvpn-server
+```
+
+Asegúrate de:
+
+* copiar `vpn-server.crt`, `vpn-server.key`, la cadena de CA y los certificados de CA necesarios a `/etc/openvpn`
+* adaptar el fichero de configuración de OpenVPN para que utilice tus certificados.
+
+---
+
+### 3. Configurar OpenVPN para utilizar tu PKI
+
+En la configuración del servidor (por ejemplo `/etc/openvpn/server.conf`), revisa las directivas:
+
+```text
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/vpn-server.crt
+key /etc/openvpn/vpn-server.key
+dh /etc/openvpn/dh.pem
+```
+
+Comprueba que:
+
+* `ca.crt` contiene la CA (o cadena) que emitió los certificados
+* `vpn-server.crt` ha sido firmado por tu CA
+* la clave privada coincide con el certificado.
+
+Reinicia el servicio OpenVPN para aplicar cambios.
+
+---
+
+### 4. Configurar un cliente OpenVPN
+
+En el lado cliente, prepara un archivo de configuración (por ejemplo `client.ovpn`) que incluya:
+
+* la dirección del servidor (`remote`)
+* el puerto y protocolo (`1194 udp`)
+* las rutas a:
+  * certificado de CA
+  * certificado de cliente
+  * clave privada de cliente.
+
+Ejemplo simplificado:
+
+```text
+client
+dev tun
+proto udp
+remote vpn.lab.local 1194
+
+ca ca.crt
+cert vpn-client.crt
+key vpn-client.key
+
+remote-cert-tls server
+```
+
+Inicia el cliente OpenVPN y verifica que la conexión se establece correctamente.
+
+---
+
+### 5. Verificar la cadena de certificados
+
+Utiliza `openssl` para inspeccionar el certificado presentado por el servidor OpenVPN:
+
+```bash
+openssl s_client -connect vpn.lab.local:1194 -starttls none
+```
+
+> Nota: según la configuración, puede ser necesario adaptar el comando o utilizar herramientas específicas de OpenVPN para depurar la conexión.
+
+Comprueba:
+
+* el certificado del servidor
+* la cadena de confianza
+* la CA que firma el certificado.
+
+---
+
+### 6. Conclusiones
+
+Al finalizar este ejercicio deberías ser capaz de:
+
+* utilizar tu PKI para emitir certificados de servidor y cliente para OpenVPN
+* configurar un servidor OpenVPN para utilizar esos certificados
+* verificar la cadena de confianza utilizada en la conexión VPN.
+
