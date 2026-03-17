@@ -59,7 +59,7 @@ openssl pkcs12 -export \
 
 Durante la ejecución OpenSSL solicitará una contraseña para proteger el contenedor.
 
-Introduce una contraseña sencilla para las pruebas del laboratorio.
+Introduce una contraseña sencilla para las pruebas del laboratorio. #He introducido del 1 al 8#
 
 Cuando el comando finalice se generará el archivo:
 
