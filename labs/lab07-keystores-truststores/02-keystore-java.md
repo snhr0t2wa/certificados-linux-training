@@ -105,9 +105,57 @@ Esto significa que el sistema confía en la autoridad certificadora que firmó e
 
 ### Paso 5 — Probar una conexión HTTPS con un certificado firmado por nuestra CA
 
-En el **Lab08 — TLS en servicios (NGINX HTTPS)** se muestra cómo levantar, con Docker, un servidor NGINX que utiliza el certificado `server.crt` generado en los laboratorios (montando `~/pki-labs/web-server` en un contenedor y escuchando en el puerto 8443).
+En este paso vas a **levantar tú mismo un servicio HTTPS de prueba con NGINX en Docker**, usando el certificado `server.crt` generado en los laboratorios.
 
-Si ya has completado ese ejercicio y tienes el contenedor NGINX en marcha, prueba a conectarte utilizando `curl`:
+1. Prepara un directorio de trabajo y una página sencilla:
+
+```bash
+mkdir -p ~/tls-web
+cd ~/tls-web
+echo "Servidor HTTPS de prueba (Lab07)" > index.html
+```
+
+2. Copia los certificados generados anteriormente:
+
+```bash
+cp ~/pki-labs/web-server/server.crt .
+cp ~/pki-labs/web-server/server.key .
+cp ~/pki-labs/web-server/fullchain.crt .
+```
+
+3. Crea el archivo de configuración `nginx.conf` con el siguiente contenido:
+
+```nginx
+events {}
+
+http {
+    server {
+        listen 443 ssl;
+
+        ssl_certificate /etc/nginx/certs/fullchain.crt;
+        ssl_certificate_key /etc/nginx/certs/server.key;
+
+        location / {
+            root /usr/share/nginx/html;
+            index index.html;
+        }
+    }
+}
+```
+
+4. Desde `~/tls-web`, arranca el servidor NGINX dentro de un contenedor Docker:
+
+```bash
+docker run -d \
+  -p 8443:443 \
+  -v $(pwd)/index.html:/usr/share/nginx/html/index.html \
+  -v $(pwd)/nginx.conf:/etc/nginx/nginx.conf \
+  -v $(pwd)/fullchain.crt:/etc/nginx/certs/fullchain.crt \
+  -v $(pwd)/server.key:/etc/nginx/certs/server.key \
+  nginx
+```
+
+5. Comprueba la conexión HTTPS desde tu sistema (que ya confía en tu CA raíz gracias a los pasos anteriores):
 
 ```bash id="cb3b6c"
 curl https://localhost:8443
