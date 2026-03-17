@@ -105,7 +105,9 @@ Esto significa que el sistema confía en la autoridad certificadora que firmó e
 
 ### Paso 5 — Probar una conexión HTTPS con un certificado firmado por nuestra CA
 
-Si dispones de un servicio HTTPS configurado con el certificado emitido por la CA del laboratorio, prueba a conectarte utilizando `curl`.
+En el **Lab08 — TLS en servicios (NGINX HTTPS)** se muestra cómo levantar, con Docker, un servidor NGINX que utiliza el certificado `server.crt` generado en los laboratorios (montando `~/pki-labs/web-server` en un contenedor y escuchando en el puerto 8443).
+
+Si ya has completado ese ejercicio y tienes el contenedor NGINX en marcha, prueba a conectarte utilizando `curl`:
 
 ```bash id="cb3b6c"
 curl https://localhost:8443
