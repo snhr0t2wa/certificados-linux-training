@@ -61,15 +61,34 @@ Esto indica que el certificado raíz ha sido incorporado al almacén de confianz
 
 ### Paso 3 — Verificar que el certificado aparece en el almacén
 
-Busca el certificado recién añadido dentro del almacén del sistema.
+El almacén consolidado de certificados de confianza del sistema se encuentra en:
 
-```bash id="qpxlfr"
-grep -R "Training Root CA" /etc/ssl/certs
+```bash
+/etc/ssl/certs/ca-certificates.crt
 ```
 
-Debería aparecer una coincidencia que indique que el certificado forma parte del almacén de confianza.
+Busca tu autoridad certificadora dentro de este archivo:
 
-Esto confirma que el sistema reconoce nuestra autoridad certificadora.
+```bash id="qpxlfr"
+openssl x509 -in /usr/local/share/ca-certificates/training-root-ca.crt -noout -subject
+```
+
+Anota el texto que aparece en `subject` (especialmente el `CN` que hayas utilizado al crear la CA raíz, por ejemplo `Training Root CA`) y úsalo para buscar dentro del almacén consolidado:
+
+```bash
+grep "<TU_COMMON_NAME_CA>" /etc/ssl/certs/ca-certificates.crt
+```
+
+Sustituye `<TU_COMMON_NAME_CA>` por el valor real de `CN` que hayas utilizado.  
+Si aparece una coincidencia, el certificado ha sido añadido correctamente al almacén de confianza.
+
+También puedes verificarlo utilizando OpenSSL contra ese almacén:
+
+```bash
+openssl verify -CAfile /etc/ssl/certs/ca-certificates.crt ~/pki-labs/web-server/server.crt
+```
+
+Si la salida indica `server.crt: OK`, confirma que el sistema reconoce nuestra autoridad certificadora y puede validar certificados emitidos por ella.
 
 ---
 
@@ -77,8 +96,15 @@ Esto confirma que el sistema reconoce nuestra autoridad certificadora.
 
 Ahora intenta verificar el certificado del servidor utilizando OpenSSL.
 
+> Importante: **es normal que falle** si no proporcionas el certificado de la CA intermedia.  
+> El almacén del sistema suele contener la **CA raíz**, pero el certificado `server.crt` está firmado por la **CA intermedia**.  
+> Con `-untrusted` le indicas a OpenSSL cuál es el certificado intermedio para que pueda construir la cadena (root → intermedia → servidor).
+
 ```bash id="dsmn4s"
-openssl verify ~/pki-labs/web-server/server.crt
+openssl verify \
+  -CAfile /etc/ssl/certs/ca-certificates.crt \
+  -untrusted ~/pki-ca/intermediate/intermediate.crt \
+  ~/pki-labs/web-server/server.crt
 ```
 
 Si la cadena de certificados está completa, la salida debería indicar:
@@ -93,7 +119,57 @@ Esto significa que el sistema confía en la autoridad certificadora que firmó e
 
 ### Paso 5 — Probar una conexión HTTPS con un certificado firmado por nuestra CA
 
-Si dispones de un servicio HTTPS configurado con el certificado emitido por la CA del laboratorio, prueba a conectarte utilizando `curl`.
+En este paso vas a **levantar tú mismo un servicio HTTPS de prueba con NGINX en Docker**, usando el certificado `server.crt` generado en los laboratorios.
+
+1. Prepara un directorio de trabajo y una página sencilla:
+
+```bash
+mkdir -p ~/tls-web
+cd ~/tls-web
+echo "Servidor HTTPS de prueba (Lab07)" > index.html
+```
+
+2. Copia los certificados generados anteriormente:
+
+```bash
+cp ~/pki-labs/web-server/server.crt .
+cp ~/pki-labs/web-server/server.key .
+cp ~/pki-labs/web-server/fullchain.crt .
+```
+
+3. Crea el archivo de configuración `nginx.conf` con el siguiente contenido:
+
+```nginx
+events {}
+
+http {
+    server {
+        listen 443 ssl;
+
+        ssl_certificate /etc/nginx/certs/fullchain.crt;
+        ssl_certificate_key /etc/nginx/certs/server.key;
+
+        location / {
+            root /usr/share/nginx/html;
+            index index.html;
+        }
+    }
+}
+```
+
+4. Desde `~/tls-web`, arranca el servidor NGINX dentro de un contenedor Docker:
+
+```bash
+docker run -d \
+  -p 8443:443 \
+  -v $(pwd)/index.html:/usr/share/nginx/html/index.html \
+  -v $(pwd)/nginx.conf:/etc/nginx/nginx.conf \
+  -v $(pwd)/fullchain.crt:/etc/nginx/certs/fullchain.crt \
+  -v $(pwd)/server.key:/etc/nginx/certs/server.key \
+  nginx
+```
+
+5. Comprueba la conexión HTTPS desde tu sistema (que ya confía en tu CA raíz gracias a los pasos anteriores):
 
 ```bash id="cb3b6c"
 curl https://localhost:8443
